@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: deepak2212/cargo-backend
+  IMAGE_NAME: deepakk2212/cargo-backend
 
 concurrency:
   group: docker-image-release
@@ -41,10 +41,24 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         shell: bash
         run: |
+          repository_url="https://hub.docker.com/v2/repositories/${IMAGE_NAME}/"
+
+          if ! curl --fail --silent --show-error \
+            --user "$DOCKERHUB_USERNAME:$DOCKERHUB_TOKEN" \
+            "$repository_url" > /dev/null; then
+            echo "Docker Hub repository ${IMAGE_NAME} was not found. Creating it..."
+            curl --fail --silent --show-error \
+              --user "$DOCKERHUB_USERNAME:$DOCKERHUB_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data '{"namespace":"deepakk2212","name":"cargo-backend","is_private":false}' \
+              --request POST \
+              https://hub.docker.com/v2/repositories/
+          fi
+
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             version="${GITHUB_REF_NAME}"
           else
-            tags_url="https://hub.docker.com/v2/repositories/${IMAGE_NAME}/tags/?page_size=100"
+            tags_url="${repository_url}tags/?page_size=100"
             highest_version=0
 
             while [[ -n "$tags_url" ]]; do
@@ -76,8 +90,6 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest
-            type=sha,format=short
             type=raw,value=${{ steps.version.outputs.version }}
 
       - name: Build and push image
@@ -90,6 +102,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-
-#  testing 1.1
